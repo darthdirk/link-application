@@ -60,7 +60,7 @@ command:
 
 ```shell
 # initialize hyrule-workspace for the link-application (main branch)
-west init -m https://github.com/zephyrproject-rtos/link-application --mr main hyrule-workspace
+west init -m https://github.com/darthdirk/link-application --mr main hyrule-workspace
 # update Zephyr modules
 cd hyrule-workspace
 west update
