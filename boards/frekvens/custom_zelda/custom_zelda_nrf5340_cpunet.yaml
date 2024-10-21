@@ -1,0 +1,14 @@
+identifier: custom_zelda/nrf5340/cpunet
+name: Custom-Zelda-NRF5340-network-MCU
+vendor: frekvens
+type: mcu
+arch: arm
+toolchain:
+  - gnuarmemb
+  - xtools
+  - zephyr
+ram: 64
+flash: 256
+supported:
+  - watchdog
+  - gpio

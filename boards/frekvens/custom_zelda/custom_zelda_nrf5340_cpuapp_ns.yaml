@@ -1,0 +1,21 @@
+identifier: custom_zelda/nrf5340/cpuapp/ns
+name: Custom-Zelda-NRF5340-application-MCU-Non-Secure
+vendor: frekvens
+type: mcu
+arch: arm
+toolchain:
+  - gnuarmemb
+  - xtools
+  - zephyr
+ram: 192
+flash: 192
+supported:
+  - i2c
+  - pwm
+  - watchdog
+  - usb_device
+  - usbd
+  - netif:openthread
+  - gpio
+  - spi
+

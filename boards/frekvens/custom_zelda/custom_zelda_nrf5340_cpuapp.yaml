@@ -1,0 +1,26 @@
+# Copyright (c) 2021 Nordic Semiconductor ASA
+# SPDX-License-Identifier: Apache-2.0
+
+identifier: custom_zelda/nrf5340/cpuapp
+name: Custom-Zelda-NRF5340-application-MCU
+vendor: frekvens
+type: mcu
+arch: arm
+toolchain:
+  - gnuarmemb
+  - xtools
+  - zephyr
+ram: 448
+flash: 1024
+supported:
+  - gpio
+  - i2c
+  - i2s
+  - pwm
+  - watchdog
+  - usb_cdc
+  - usb_device
+  - usbd
+  - netif:openthread
+  - gpio
+  - spi
