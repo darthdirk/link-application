@@ -1,0 +1,6 @@
+#ifndef LOGGER_UNITY_CONFIG_H
+#define LOGGER_UNITY_CONFIG_H
+
+#define UNITY_SUPPORT_64
+
+#endif

@@ -1,0 +1,9 @@
+# Copy to .envrc.private; this file is ignored by Git.
+export DEBUG_53_SN=504403721
+export THING_BOARD_53=thingy53/nrf5340/cpuapp
+export IP_DEBUG=false
+export DEBUG_HOST=localhost
+export SERIAL_PORT=/dev/ttyACM0
+# Optional, only for a custom board requiring your separate BSP:
+# export BSP_DIR="$PWD/../Hyrule-Zephyr-SDK"
+# export ZEPHYR_SDK_INSTALL_DIR="$HOME/zephyr-sdk-0.17.0"

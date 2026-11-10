@@ -1,0 +1,77 @@
+{
+  "folders": [
+    { "name": "logger", "path": "." },
+    { "name": "Zephyr", "path": "../zephyr" }
+  ],
+  "extensions": {
+    "recommendations": [
+      "marus25.cortex-debug",
+      "ms-vscode.cpptools",
+      "nordic-semiconductor.nrf-connect-extension-pack",
+      "ms-vscode.cmake-tools"
+    ]
+  },
+  "settings": {
+    "nrf-connect.applications": ["${workspaceFolder:logger}/app"],
+    "C_Cpp.default.compileCommands": "${env:THING_BUILD_DIR_53}/compile_commands.json",
+    "C_Cpp.default.compilerPath": "${env:ZEPHYR_SDK_INSTALL_DIR}/arm-zephyr-eabi/bin/arm-zephyr-eabi-gcc",
+    "cmake.configureOnOpen": false,
+    "files.eol": "\n"
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Build Thingy:53",
+        "type": "shell",
+        "command": "just build_53",
+        "options": { "cwd": "${workspaceFolder:logger}" },
+        "problemMatcher": "$gcc",
+        "group": { "kind": "build", "isDefault": true }
+      },
+      {
+        "label": "Build nRF5340 DK",
+        "type": "shell",
+        "command": "just build_dk",
+        "options": { "cwd": "${workspaceFolder:logger}" },
+        "problemMatcher": "$gcc"
+      },
+      {
+        "label": "Check",
+        "type": "shell",
+        "command": "just check",
+        "options": { "cwd": "${workspaceFolder:logger}" },
+        "problemMatcher": "$gcc"
+      }
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Thingy:53 — external J-Link server",
+        "type": "cortex-debug",
+        "request": "launch",
+        "cwd": "${workspaceFolder:logger}",
+        "executable": "${env:THING_BUILD_DIR_53}/zephyr/zephyr.elf",
+        "gdbPath": "${env:ZEPHYR_SDK_INSTALL_DIR}/arm-zephyr-eabi/bin/arm-zephyr-eabi-gdb",
+        "servertype": "external",
+        "gdbTarget": "localhost:2331",
+        "runToEntryPoint": "main",
+        "preLaunchTask": "Build Thingy:53"
+      },
+      {
+        "name": "nRF5340 DK — external J-Link server",
+        "type": "cortex-debug",
+        "request": "launch",
+        "cwd": "${workspaceFolder:logger}",
+        "executable": "${env:DK_BUILD_DIR}/zephyr/zephyr.elf",
+        "gdbPath": "${env:ZEPHYR_SDK_INSTALL_DIR}/arm-zephyr-eabi/bin/arm-zephyr-eabi-gdb",
+        "servertype": "external",
+        "gdbTarget": "localhost:2331",
+        "runToEntryPoint": "main",
+        "preLaunchTask": "Build nRF5340 DK"
+      }
+    ]
+  }
+}

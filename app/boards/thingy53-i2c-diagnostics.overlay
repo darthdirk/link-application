@@ -1,0 +1,26 @@
+/* The normal sensor bus is I2C1 on TP4/TP5. Optionally expose the edge bus too. */
+&pinctrl {
+	diagnostic_i2c_default: diagnostic_i2c_default {
+		group1 {
+			psels = <NRF_PSEL(TWIM_SCL, 0, 5)>,
+				<NRF_PSEL(TWIM_SDA, 0, 4)>;
+		};
+	};
+
+	diagnostic_i2c_sleep: diagnostic_i2c_sleep {
+		group1 {
+			psels = <NRF_PSEL(TWIM_SCL, 0, 5)>,
+				<NRF_PSEL(TWIM_SDA, 0, 4)>;
+			low-power-enable;
+		};
+	};
+};
+
+&i2c0 {
+	compatible = "nordic,nrf-twim";
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	pinctrl-0 = <&diagnostic_i2c_default>;
+	pinctrl-1 = <&diagnostic_i2c_sleep>;
+	pinctrl-names = "default", "sleep";
+};

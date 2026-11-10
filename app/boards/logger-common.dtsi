@@ -1,0 +1,60 @@
+/* Both supported boards have an 8 MiB MX25R64 QSPI device. */
+/delete-node/ &storage_partition;
+
+/ {
+	aliases {
+		environment-sensor = &external_bme280;
+	};
+
+	chosen {
+		/delete-property/ zephyr,bt-hci;
+		/delete-property/ zephyr,bt-hci-ipc;
+		/delete-property/ zephyr,bt-mon-uart;
+		/delete-property/ zephyr,bt-c2h-uart;
+		/delete-property/ nordic,802154-spinel-ipc;
+		/delete-property/ zephyr,ieee802154;
+	};
+};
+
+&mx25r64 {
+	zephyr,pm-device-runtime-auto;
+
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/* Leave lower 4 MiB, including Thingy factory DFU slots, alone. */
+		storage_partition: partition@400000 {
+			label = "logger-storage";
+			reg = <0x400000 0x400000>;
+		};
+	};
+};
+
+&i2c1 {
+	compatible = "nordic,nrf-twim";
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	pinctrl-0 = <&logger_i2c_default>;
+	pinctrl-1 = <&logger_i2c_sleep>;
+	pinctrl-names = "default", "sleep";
+
+	external_bme280: bme280@77 {
+		compatible = "bosch,bme280";
+		reg = <0x77>;
+	};
+};
+
+/* UART1/SPI1 share I2C1's peripheral instance. Console is USB CDC ACM. */
+&uart1 { status = "disabled"; };
+&spi1 { status = "disabled"; };
+&uart0 { status = "disabled"; };
+&spi0 { status = "disabled"; };
+&i2c0 { status = "disabled"; };
+&adc { status = "disabled"; };
+&pwm0 { status = "disabled"; };
+&spi4 { status = "disabled"; };
+&gpio_fwd { status = "disabled"; };
+&bt_hci_ipc0 { status = "disabled"; };
+&ieee802154 { status = "disabled"; };

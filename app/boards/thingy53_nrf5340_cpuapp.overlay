@@ -1,0 +1,39 @@
+#include "logger-common.dtsi"
+
+/* Hardware 1.1.0 schematic: TP4 = SDA/P1.02, TP5 = SCL/P1.03. */
+/ {
+	aliases {
+		heartbeat-led = &green_led;
+	};
+};
+
+&pinctrl {
+	logger_i2c_default: logger_i2c_default {
+		group1 {
+			psels = <NRF_PSEL(TWIM_SCL, 1, 3)>,
+				<NRF_PSEL(TWIM_SDA, 1, 2)>;
+		};
+	};
+
+	logger_i2c_sleep: logger_i2c_sleep {
+		group1 {
+			psels = <NRF_PSEL(TWIM_SCL, 1, 3)>,
+				<NRF_PSEL(TWIM_SDA, 1, 2)>;
+			low-power-enable;
+		};
+	};
+};
+
+/* Keep board-default rails enabled: 3V3 powers the green LED, and the switched
+ * sensor rail powers the TP4/TP5 bus pull-ups. QSPI still uses DPD.
+ */
+
+&bme688 { status = "disabled"; };
+&bmm150 { status = "disabled"; };
+&bh1749 { status = "disabled"; };
+&adxl362 { status = "disabled"; };
+&bmi270 { status = "disabled"; };
+&spi3 { status = "disabled"; };
+&pwm1 { status = "disabled"; };
+&vbatt { status = "disabled"; };
+&fuel_gauge { status = "disabled"; };

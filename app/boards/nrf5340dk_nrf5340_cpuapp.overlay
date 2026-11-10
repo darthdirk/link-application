@@ -1,0 +1,26 @@
+#include <../boards/common/usb/cdc_acm_serial.dtsi>
+#include "logger-common.dtsi"
+
+/* CDC ACM is on the DK's nRF USB connector, not its J-Link USB connector. */
+/ {
+	aliases {
+		heartbeat-led = &led0;
+	};
+};
+
+&pinctrl {
+	logger_i2c_default: logger_i2c_default {
+		group1 {
+			psels = <NRF_PSEL(TWIM_SCL, 1, 3)>,
+				<NRF_PSEL(TWIM_SDA, 1, 2)>;
+		};
+	};
+
+	logger_i2c_sleep: logger_i2c_sleep {
+		group1 {
+			psels = <NRF_PSEL(TWIM_SCL, 1, 3)>,
+				<NRF_PSEL(TWIM_SDA, 1, 2)>;
+			low-power-enable;
+		};
+	};
+};

@@ -1,0 +1,21 @@
+repos:
+  - repo: local
+    hooks:
+      - id: clang-format
+        name: clang-format (check)
+        entry: bash scripts/check.sh format-check
+        language: system
+        files: '^(app|tests)/.*\.[ch]$'
+        pass_filenames: false
+      - id: cppcheck
+        name: cppcheck
+        entry: bash scripts/check.sh cppcheck
+        language: system
+        files: '^(app|tests)/.*\.[ch]$'
+        pass_filenames: false
+      - id: unity
+        name: Unity core tests
+        entry: bash scripts/test.sh
+        language: system
+        files: '^(app|tests)/.*\.[ch]$'
+        pass_filenames: false

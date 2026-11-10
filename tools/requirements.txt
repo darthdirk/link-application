@@ -1,0 +1,10 @@
+# Host tools; install in the workspace virtual environment.
+west==1.5.0
+cmake==3.31.6
+ninja==1.13.2
+clang-format==18.1.8
+cppcheck==1.5.3
+rust-just==1.46.0
+# Ubuntu 22.04 ships Python 3.10; pre-commit 4.7 requires Python 3.11.
+pre-commit==4.6.2
+pyserial==3.5
