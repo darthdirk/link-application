@@ -85,6 +85,8 @@ Use `just debug_server_dk` with the DK launch entry. GDB connects to `localhost:
 
 Commands run in the USB serial terminal, not your Linux shell. `help` lists them. Shell handlers copy requests into a bounded queue; an acknowledgement that a request was queued is followed by its execution result.
 
+The USB shell starts with an empty prompt and VT100 colors/cursor control disabled in `app/prj.conf`. These defaults apply after every reboot, so Minicom captures do not contain repeated `logger>` prompts or shell terminal-formatting sequences. Typed commands, `Queued`/`Done` acknowledgements, and enabled diagnostic messages can still appear. Restoring the prompt and VT100 support requires changing these build settings and reflashing.
+
 On first use, run `status`. Blank or damaged flash is **not automatically formatted**. If you intend to initialize the logger partition, explicitly run:
 
 ```text
