@@ -1,4 +1,5 @@
 /build/
+/logs/
 /.envrc.private
 /.direnv/
 /.venv/

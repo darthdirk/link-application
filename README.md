@@ -1,6 +1,6 @@
 # LINK BME280 logger
 
-A small Zephyr application for an **external BME280 over I²C**, with a **USB CDC ACM shell**, CSV recording to LittleFS, and simultaneous streaming. It starts idle. Logging and streaming each default to one reading every five seconds. No Bluetooth, Wi-Fi, cellular modem, or network-core firmware is built.
+A small Zephyr application for an **external BME280 over I²C**, with a **USB CDC ACM shell**, CSV recording to LittleFS, and simultaneous streaming. It starts idle. Logging and streaming each default to one reading every 30 seconds. No Bluetooth, Wi-Fi, cellular modem, or network-core firmware is built.
 
 The application uses the Zephyr revision shipped with nRF Connect SDK 3.0.0 and Zephyr SDK 0.17.0. `west.yml` pins the needed modules instead of pulling the full Nordic SDK. Board hardware belongs in the board overlays/BSP; application modules do not contain board pin numbers. A separate `Hyrule-Zephyr-SDK` checkout is left untouched and can be enabled with `BSP_DIR` when developing a custom board.
 
@@ -81,6 +81,34 @@ just debug_server_53
 
 Use `just debug_server_dk` with the DK launch entry. GDB connects to `localhost:2331`; firmware ELF paths are `build/thingy53/zephyr/zephyr.elf` and `build/dk/zephyr/zephyr.elf`. This application does not use sysbuild. To connect the local debug server to a remote J-Link, set `IP_DEBUG=true` and `DEBUG_HOST` to that probe/server address. The pinned west J-Link runner selects a remote probe by IP; local USB mode selects serial `504403721` by default. DNS lookup occurs only in IP mode.
 
+## Daily capture with Minicom
+
+`just capture` opens Minicom, sets the board's UTC clock from the PC, saves 30-second logging and streaming rates, and starts both activities. Close other programs using the serial port first. The PC clock must be correct. Existing installations need Minicom 2.8 or newer and timezone data; the full setup script installs these automatically:
+
+```bash
+sudo apt install minicom tzdata
+direnv allow
+direnv exec . just build_53 &&
+direnv exec . just flash_53 &&
+direnv exec . just capture
+```
+
+On later runs, use `direnv exec . just capture` without flashing again. The program sends `time set YYYY-MM-DDTHH:MM:SSZ` using the current UTC date/time at startup, then waits for each setup command to succeed. It sets both rates to 30,000 ms and saves `config.cfg`, so previously saved five-second rates are updated too. It never formats storage; initialization errors stop capture with an error.
+
+Minicom displays the device terminal while the program writes only environmental CSV records to `logs/env-YYYY-MM-DD.csv`. For example, November 17 in Denver uses `logs/env-2026-11-17.csv`. Each file has one header. **Rollover is at midnight in America/Denver**, following local calendar dates through daylight-saving changes. Restarting during the same day appends to the existing file. Files with a different header or incomplete final row are rejected for inspection. Each accepted row is flushed and synced to disk.
+
+Set the port, output folder, and timezone in `.envrc.private`, then run `direnv allow`:
+
+```bash
+export SERIAL_PORT=/dev/ttyACM0
+export LOGGER_CAPTURE_DIR="$HOME/link-logs"
+export LOGGER_CAPTURE_TIMEZONE=America/Denver
+```
+
+For a stable USB path, `SERIAL_PORT` can use the appropriate entry in `/dev/serial/by-id/`. `logs/` is ignored by Git. Minicom is the only reader of the serial device; its capture stream feeds the dated-file writer. The program uses a temporary Minicom profile and removes it on exit, preserving your normal Minicom settings. Leave Minicom's capture enabled; this program manages its destination and rollover.
+
+Keep the PC awake and the program running for continuous capture. To stop the board as well, enter `stream stop` and `log stop`, wait for successful completion, then exit Minicom with **Ctrl+A, Q, Enter**. Closing Minicom alone ends PC capture; the board continues recording to LittleFS in `readings.csv`, subject to its existing 1 MiB file limit. When that file fills, set `export LOGGER_DEVICE_LOG=readings-2.csv` in `.envrc.private` and run `direnv allow` before restarting capture; previous logs are preserved. Midnight rollover applies to the PC files. After a board reset or USB reconnection, restart `just capture` to set UTC and resume acquisition. `Queued`, `Done`, and diagnostic messages remain visible in the terminal and are excluded from the PC CSV files.
+
 ## Device commands
 
 Commands run in the USB serial terminal, not your Linux shell. `help` lists them. Shell handlers copy requests into a bounded queue; an acknowledgement that a request was queued is followed by its execution result.
@@ -131,14 +159,14 @@ A disconnected or slow USB host may lose stream/output records; `status` reports
 The runtime file is `/lfs/config.cfg`; the root `config.cfg` shows its format. Rate changes apply in RAM immediately. Save explicitly to persist them:
 
 ```text
-config set log_rate_ms 5000
-config set stream_rate_ms 5000
+config set log_rate_ms 30000
+config set stream_rate_ms 30000
 config set flush_rate_ms 10000
 config save
 config show
 ```
 
-All intervals are milliseconds, from 100 to 3,600,000. Defaults are 5,000 ms for log/stream and 10,000 ms for flush. Saving writes and syncs a temporary file before renaming it. A malformed configuration is rejected as a whole; defaults remain active. A sudden power loss can lose records since the last completed flush; use `log flush`/`log stop` before removing power.
+All intervals are milliseconds, from 100 to 3,600,000. Defaults are 30,000 ms for log/stream and 10,000 ms for flush. An existing `/lfs/config.cfg` survives flashing and overrides these defaults; run the commands above to update a previously configured board to 30-second sampling. Saving writes and syncs a temporary file before renaming it. A malformed configuration is rejected as a whole; defaults remain active. A sudden power loss can lose records since the last completed flush; use `log flush`/`log stop` before removing power.
 
 Diagnostic messages are separate from CSV recordings. Select the minimum severity per module or globally:
 
@@ -178,4 +206,4 @@ just check         # format check, cppcheck, focused Unity tests
 just hooks         # reinstall local Git hooks if needed
 ```
 
-The Unity suite covers UTC/calendar validation, all start/stop state combinations, record formatting bounds, and legacy CSV validation. Cppcheck checks `state.c`, `timekeeping.c`, and `record.c`. Zephyr kernel/shell macros exceed its preprocessor support, so the remaining firmware modules are checked by ARM GCC with `-Wall -Wextra -Werror -Wformat=2`. CI builds both boards and runs the same checks. These checks do not replace hardware validation of USB enumeration, I²C wiring, flash retention, and power consumption.
+The Unity suite covers UTC/calendar validation, all start/stop state combinations, record formatting bounds, and legacy CSV validation. Python capture tests cover calendar rollover, daylight-saving transitions, append/restart, and invalid files. Cppcheck checks `state.c`, `timekeeping.c`, and `record.c`. Zephyr kernel/shell macros exceed its preprocessor support, so the remaining firmware modules are checked by ARM GCC with `-Wall -Wextra -Werror -Wformat=2`. CI builds both boards and runs the same checks. These checks do not replace hardware validation of USB enumeration, I²C wiring, flash retention, and power consumption.

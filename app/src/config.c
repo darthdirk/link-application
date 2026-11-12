@@ -16,8 +16,8 @@ void config_defaults(struct logger_config *config)
 {
 	if (config != NULL) {
 		*config = (struct logger_config){
-		    .log_rate_ms = 5000,
-		    .stream_rate_ms = 5000,
+		    .log_rate_ms = 30000,
+		    .stream_rate_ms = 30000,
 		    .flush_rate_ms = 10000,
 		};
 	}
