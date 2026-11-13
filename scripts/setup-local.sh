@@ -17,7 +17,7 @@ if "$install_apt"; then
     if [[ $(id -u) == 0 ]]; then apt_command=(apt-get); fi
     "${apt_command[@]}" update
     "${apt_command[@]}" install -y git python3 python3-venv python3-pip build-essential \
-        curl wget xz-utils file gperf ripgrep device-tree-compiler libusb-1.0-0 libncursesw6 libtinfo6 direnv minicom tzdata
+        curl wget xz-utils file gperf ripgrep device-tree-compiler libusb-1.0-0 libncursesw6 libtinfo6 direnv
 fi
 source "$(dirname -- "${BASH_SOURCE[0]}")/environment.sh"
 cd "$LOGGER_REPO_DIR"

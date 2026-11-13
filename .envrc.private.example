@@ -4,11 +4,6 @@ export THING_BOARD_53=thingy53/nrf5340/cpuapp
 export IP_DEBUG=false
 export DEBUG_HOST=localhost
 export SERIAL_PORT=/dev/ttyACM0
-export LOGGER_CAPTURE_TIMEZONE=America/Denver
-# Optional; capture defaults to the ignored logs/ directory in this checkout.
-# export LOGGER_CAPTURE_DIR="$HOME/link-logs"
-# Optional fresh on-device backup filename when the previous file reaches 1 MiB.
-# export LOGGER_DEVICE_LOG=readings-2.csv
 # Optional, only for a custom board requiring your separate BSP:
 # export BSP_DIR="$PWD/../Hyrule-Zephyr-SDK"
 # export ZEPHYR_SDK_INSTALL_DIR="$HOME/zephyr-sdk-0.17.0"

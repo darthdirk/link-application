@@ -81,33 +81,11 @@ just debug_server_53
 
 Use `just debug_server_dk` with the DK launch entry. GDB connects to `localhost:2331`; firmware ELF paths are `build/thingy53/zephyr/zephyr.elf` and `build/dk/zephyr/zephyr.elf`. This application does not use sysbuild. To connect the local debug server to a remote J-Link, set `IP_DEBUG=true` and `DEBUG_HOST` to that probe/server address. The pinned west J-Link runner selects a remote probe by IP; local USB mode selects serial `504403721` by default. DNS lookup occurs only in IP mode.
 
-## Daily capture with Minicom
+## PC capture application
 
-`just capture` opens Minicom, sets the board's UTC clock from the PC, saves 30-second logging and streaming rates, and starts both activities. Close other programs using the serial port first. The PC clock must be correct. Existing installations need Minicom 2.8 or newer and timezone data; the full setup script installs these automatically:
+The Minicom capture tool is maintained separately as `link-environment-capture`, with its own repository, `justfile`, `.envrc`, setup, and tests. Use this firmware repository to build and flash the board, then run `just capture` from the capture application's directory. The capture application sets UTC and the 30-second rates and writes `env-YYYY-MM-DD.csv` files with midnight rollover in America/Denver.
 
-```bash
-sudo apt install minicom tzdata
-direnv allow
-direnv exec . just build_53 &&
-direnv exec . just flash_53 &&
-direnv exec . just capture
-```
-
-On later runs, use `direnv exec . just capture` without flashing again. The program sends `time set YYYY-MM-DDTHH:MM:SSZ` using the current UTC date/time at startup, then waits for each setup command to succeed. It sets both rates to 30,000 ms and saves `config.cfg`, so previously saved five-second rates are updated too. It never formats storage; initialization errors stop capture with an error.
-
-Minicom displays the device terminal while the program writes only environmental CSV records to `logs/env-YYYY-MM-DD.csv`. For example, November 17 in Denver uses `logs/env-2026-11-17.csv`. Each file has one header. **Rollover is at midnight in America/Denver**, following local calendar dates through daylight-saving changes. Restarting during the same day appends to the existing file. Files with a different header or incomplete final row are rejected for inspection. Each accepted row is flushed and synced to disk.
-
-Set the port, output folder, and timezone in `.envrc.private`, then run `direnv allow`:
-
-```bash
-export SERIAL_PORT=/dev/ttyACM0
-export LOGGER_CAPTURE_DIR="$HOME/link-logs"
-export LOGGER_CAPTURE_TIMEZONE=America/Denver
-```
-
-For a stable USB path, `SERIAL_PORT` can use the appropriate entry in `/dev/serial/by-id/`. `logs/` is ignored by Git. Minicom is the only reader of the serial device; its capture stream feeds the dated-file writer. The program uses a temporary Minicom profile and removes it on exit, preserving your normal Minicom settings. Leave Minicom's capture enabled; this program manages its destination and rollover.
-
-Keep the PC awake and the program running for continuous capture. To stop the board as well, enter `stream stop` and `log stop`, wait for successful completion, then exit Minicom with **Ctrl+A, Q, Enter**. Closing Minicom alone ends PC capture; the board continues recording to LittleFS in `readings.csv`, subject to its existing 1 MiB file limit. When that file fills, set `export LOGGER_DEVICE_LOG=readings-2.csv` in `.envrc.private` and run `direnv allow` before restarting capture; previous logs are preserved. Midnight rollover applies to the PC files. After a board reset or USB reconnection, restart `just capture` to set UTC and resume acquisition. `Queued`, `Done`, and diagnostic messages remain visible in the terminal and are excluded from the PC CSV files.
+Existing `logs/` files in this firmware checkout are preserved and remain ignored by Git. To continue appending to them, set `LOGGER_CAPTURE_DIR` in the separate application's `.envrc.private` to this checkout's `logs/` directory, then run `direnv allow` there.
 
 ## Device commands
 
@@ -206,4 +184,4 @@ just check         # format check, cppcheck, focused Unity tests
 just hooks         # reinstall local Git hooks if needed
 ```
 
-The Unity suite covers UTC/calendar validation, all start/stop state combinations, record formatting bounds, and legacy CSV validation. Python capture tests cover calendar rollover, daylight-saving transitions, append/restart, and invalid files. Cppcheck checks `state.c`, `timekeeping.c`, and `record.c`. Zephyr kernel/shell macros exceed its preprocessor support, so the remaining firmware modules are checked by ARM GCC with `-Wall -Wextra -Werror -Wformat=2`. CI builds both boards and runs the same checks. These checks do not replace hardware validation of USB enumeration, I²C wiring, flash retention, and power consumption.
+The Unity suite covers UTC/calendar validation, all start/stop state combinations, record formatting bounds, and legacy CSV validation. Cppcheck checks `state.c`, `timekeeping.c`, and `record.c`. Zephyr kernel/shell macros exceed its preprocessor support, so the remaining firmware modules are checked by ARM GCC with `-Wall -Wextra -Werror -Wformat=2`. CI builds both boards and runs the same checks. These checks do not replace hardware validation of USB enumeration, I²C wiring, flash retention, and power consumption.

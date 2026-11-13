@@ -39,19 +39,12 @@ debug_server_dk:
 serial:
     bash scripts/dev.sh serial
 
-# Start Minicom, configure sampling, and capture dated CSVs with midnight rollover.
-capture:
-    bash scripts/dev.sh capture
-
 # Print a UTC time command to paste into the device shell.
 time_command:
     @date -u '+time set %Y-%m-%dT%H:%M:%SZ'
 
 test:
     bash scripts/test.sh
-
-capture-test:
-    python -m unittest discover -s tests -p 'test_capture*.py'
 
 format:
     bash scripts/check.sh format
@@ -62,7 +55,7 @@ format-check:
 cppcheck:
     bash scripts/check.sh cppcheck
 
-check: format-check cppcheck test capture-test
+check: format-check cppcheck test
 
 hooks:
     pre-commit install

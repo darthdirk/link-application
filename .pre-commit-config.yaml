@@ -19,9 +19,3 @@ repos:
         language: system
         files: '^(app|tests)/.*\.[ch]$'
         pass_filenames: false
-      - id: capture
-        name: Host capture tests
-        entry: python -m unittest discover -s tests -p test_capture*.py
-        language: system
-        files: '^(scripts/capture.*|tests/test_capture.*)\.py$'
-        pass_filenames: false

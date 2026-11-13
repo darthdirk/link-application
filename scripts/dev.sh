@@ -47,8 +47,5 @@ case "$command_name" in
     serial)
         exec python -m serial.tools.miniterm "$SERIAL_PORT" 115200 --eol LF
         ;;
-    capture)
-        exec python "$LOGGER_REPO_DIR/scripts/capture.py"
-        ;;
-    *) printf 'Usage: %s {build|flash|debugserver} {thingy|dk}, {build-diagnostics|flash-diagnostics} thingy, or {serial|capture}\n' "$0" >&2; exit 2 ;;
+    *) printf 'Usage: %s {build|flash|debugserver} {thingy|dk}, {build-diagnostics|flash-diagnostics} thingy, or serial\n' "$0" >&2; exit 2 ;;
 esac
