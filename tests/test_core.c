@@ -1,3 +1,4 @@
+#include "audio_level.h"
 #include "record.h"
 #include "state.h"
 #include "timekeeping.h"
@@ -183,11 +184,11 @@ static void test_csv_prints_engineering_units(void)
 				       .pressure_pa = 84484};
 	char text[RECORD_TEXT_SIZE];
 
-	TEST_ASSERT_GREATER_THAN_INT(0, record_format(&record, text, sizeof(text)));
+	TEST_ASSERT_GREATER_THAN_INT(0, record_format_environment(&record, text, sizeof(text)));
 	TEST_ASSERT_EQUAL_STRING("1650947,1794330891263,24.230,17.985,844.84", text);
 	record = (struct sensor_record){
 	    .epoch_ms = -1, .temperature_mc = -1, .humidity_mpct = 1, .pressure_pa = 1};
-	TEST_ASSERT_GREATER_THAN_INT(0, record_format(&record, text, sizeof(text)));
+	TEST_ASSERT_GREATER_THAN_INT(0, record_format_environment(&record, text, sizeof(text)));
 	TEST_ASSERT_EQUAL_STRING("0,-1,-0.001,0.001,0.01", text);
 
 	record = (struct sensor_record){.uptime_ms = INT64_MIN,
@@ -195,7 +196,7 @@ static void test_csv_prints_engineering_units(void)
 					.temperature_mc = INT32_MIN,
 					.humidity_mpct = INT32_MAX,
 					.pressure_pa = INT32_MIN};
-	TEST_ASSERT_GREATER_THAN_INT(0, record_format(&record, text, sizeof(text)));
+	TEST_ASSERT_GREATER_THAN_INT(0, record_format_environment(&record, text, sizeof(text)));
 	TEST_ASSERT_EQUAL_STRING("-9223372036854775808,9223372036854775807,-2147483.648,"
 				 "2147483.647,-21474836.48",
 				 text);
@@ -206,13 +207,92 @@ static void test_csv_checks_nulls_and_buffer_bounds(void)
 	const struct sensor_record record = {0};
 	char text[sizeof("0,0,0.000,0.000,0.00")];
 
-	TEST_ASSERT_EQUAL_INT(sizeof(text) - 1, record_format(&record, text, sizeof(text)));
+	TEST_ASSERT_EQUAL_INT(sizeof(text) - 1,
+			      record_format_environment(&record, text, sizeof(text)));
 	TEST_ASSERT_EQUAL_STRING("0,0,0.000,0.000,0.00", text);
-	TEST_ASSERT_EQUAL_INT(-ENOSPC, record_format(&record, text, sizeof(text) - 1U));
+	TEST_ASSERT_EQUAL_INT(-ENOSPC, record_format_environment(&record, text, sizeof(text) - 1U));
 	TEST_ASSERT_EQUAL_STRING("", text);
-	TEST_ASSERT_EQUAL_INT(-EINVAL, record_format(NULL, text, sizeof(text)));
-	TEST_ASSERT_EQUAL_INT(-EINVAL, record_format(&record, NULL, sizeof(text)));
-	TEST_ASSERT_EQUAL_INT(-EINVAL, record_format(&record, text, 0));
+	TEST_ASSERT_EQUAL_INT(-EINVAL, record_format_environment(NULL, text, sizeof(text)));
+	TEST_ASSERT_EQUAL_INT(-EINVAL, record_format_environment(&record, NULL, sizeof(text)));
+	TEST_ASSERT_EQUAL_INT(-EINVAL, record_format_environment(&record, text, 0));
+}
+
+static void test_expanded_csv_preserves_column_order_and_units(void)
+{
+	const struct sensor_record record = {
+	    .uptime_ms = 123,
+	    .epoch_ms = -1,
+	    .temperature_mc = -1,
+	    .humidity_mpct = 50000,
+	    .pressure_pa = 101325,
+	    .bme688_temperature_mc = 22000,
+	    .bme688_humidity_mpct = 60000,
+	    .bme688_pressure_pa = 100000,
+	    .bme688_gas_ohm = 123456,
+	    .bmi270_accel_mms2 = {0, -9807, 1},
+	    .bmi270_gyro_mrads = {-1, 2000, 0},
+	    .adxl362_accel_mms2 = {1, 2, 9807},
+	    .adxl362_temperature_mc = 25000,
+	    .bmm150_milli_ut = {-12345, 1, 42000},
+	    .bh1749_red = 100,
+	    .bh1749_green = 200,
+	    .bh1749_blue = 300,
+	    .bh1749_ir = 400,
+	    .battery_mv = 4100,
+	    .microphone_rms = 1234,
+	    .valid_mask = 511,
+	};
+	char text[RECORD_TEXT_SIZE];
+
+	TEST_ASSERT_GREATER_THAN_INT(0, record_format(&record, text, sizeof(text)));
+	TEST_ASSERT_EQUAL_STRING("123,-1,-0.001,50.000,1013.25,22.000,60.000,1000.00,123456,"
+				 "0.000,-9.807,0.001,-0.001,2.000,0.000,0.001,0.002,9.807,25.000,"
+				 "-12.345,0.001,42.000,100,200,300,400,4.100,1234,511",
+				 text);
+	TEST_ASSERT_LESS_THAN_UINT(RECORD_TEXT_SIZE, sizeof(RECORD_CSV_HEADER));
+}
+
+static void test_expanded_csv_omits_unavailable_sensor_groups(void)
+{
+	struct sensor_record record = {
+	    .uptime_ms = 123,
+	    .epoch_ms = -1,
+	    .temperature_mc = 25000,
+	    .humidity_mpct = 50000,
+	    .pressure_pa = 101325,
+	    .bme688_temperature_mc = 99999,
+	    .microphone_rms = 999,
+	    .valid_mask = RECORD_VALID_EXTERNAL,
+	};
+	char text[RECORD_TEXT_SIZE];
+
+	TEST_ASSERT_GREATER_THAN_INT(0, record_format(&record, text, sizeof(text)));
+	TEST_ASSERT_EQUAL_STRING("123,-1,25.000,50.000,1013.25,,,,,,,,,,,,,,,,,,,,,,,,1", text);
+	record.valid_mask = RECORD_VALID_MICROPHONE;
+	TEST_ASSERT_GREATER_THAN_INT(0, record_format(&record, text, sizeof(text)));
+	TEST_ASSERT_EQUAL_STRING("123,-1,,,,,,,,,,,,,,,,,,,,,,,,,,999,256", text);
+}
+
+static void test_expanded_csv_handles_extremes_and_bounds(void)
+{
+	struct sensor_record record;
+	char text[RECORD_TEXT_SIZE];
+	char exact[RECORD_TEXT_SIZE];
+
+	memset(&record, 0x80, sizeof(record));
+	record.uptime_ms = INT64_MIN;
+	record.epoch_ms = INT64_MAX;
+	record.valid_mask = 511;
+	int length = record_format(&record, text, sizeof(text));
+	TEST_ASSERT_GREATER_THAN_INT(0, length);
+	TEST_ASSERT_EQUAL_INT(length, record_format(&record, exact, (size_t)length + 1U));
+	TEST_ASSERT_EQUAL_STRING(text, exact);
+	TEST_ASSERT_EQUAL_INT(-ENOSPC, record_format(&record, exact, (size_t)length));
+	TEST_ASSERT_EQUAL_STRING("", exact);
+	TEST_ASSERT_EQUAL_INT(-ENOSPC, record_format(&record, exact, 1U));
+	TEST_ASSERT_EQUAL_INT(-EINVAL, record_format(NULL, exact, sizeof(exact)));
+	TEST_ASSERT_EQUAL_INT(-EINVAL, record_format(&record, NULL, sizeof(exact)));
+	TEST_ASSERT_EQUAL_INT(-EINVAL, record_format(&record, exact, 0U));
 }
 
 static void test_legacy_csv_converts_saved_reading(void)
@@ -227,7 +307,7 @@ static void test_legacy_csv_converts_saved_reading(void)
 	TEST_ASSERT_EQUAL_INT32(24550, record.temperature_mc);
 	TEST_ASSERT_EQUAL_INT32(20603, record.humidity_mpct);
 	TEST_ASSERT_EQUAL_INT32(84477, record.pressure_pa);
-	TEST_ASSERT_GREATER_THAN_INT(0, record_format(&record, text, sizeof(text)));
+	TEST_ASSERT_GREATER_THAN_INT(0, record_format_environment(&record, text, sizeof(text)));
 	TEST_ASSERT_EQUAL_STRING("113280,1794331567132,24.550,20.603,844.77", text);
 }
 
@@ -298,9 +378,37 @@ static void test_legacy_csv_rejects_invalid_rows_without_changing_output(void)
 	TEST_ASSERT_EQUAL_INT(-EINVAL, record_parse_legacy("0,-1,0,0,0", NULL));
 }
 
+static void test_pcm_rms_units_extremes_and_invalid_inputs(void)
+{
+	const int16_t silence[] = {0, 0};
+	const int16_t bipolar[] = {-1000, 1000};
+	const int16_t minimum[] = {INT16_MIN};
+	const int16_t maximum[] = {INT16_MAX};
+	int32_t result = -1;
+
+	TEST_ASSERT_EQUAL_INT(0, pcm_rms(silence, 2U, &result));
+	TEST_ASSERT_EQUAL_INT32(0, result);
+	TEST_ASSERT_EQUAL_INT(0, pcm_rms(bipolar, 2U, &result));
+	TEST_ASSERT_EQUAL_INT32(1000, result);
+	TEST_ASSERT_EQUAL_INT(0, pcm_rms(minimum, 1U, &result));
+	TEST_ASSERT_EQUAL_INT32(32768, result);
+	TEST_ASSERT_EQUAL_INT(0, pcm_rms(maximum, 1U, &result));
+	TEST_ASSERT_EQUAL_INT32(32767, result);
+
+	result = 123;
+	TEST_ASSERT_EQUAL_INT(-EINVAL, pcm_rms(NULL, 1U, &result));
+	TEST_ASSERT_EQUAL_INT32(123, result);
+	TEST_ASSERT_EQUAL_INT(-EINVAL, pcm_rms(silence, 0U, &result));
+	TEST_ASSERT_EQUAL_INT32(123, result);
+	TEST_ASSERT_EQUAL_INT(-EINVAL, pcm_rms(silence, (size_t)UINT16_MAX + 1U, &result));
+	TEST_ASSERT_EQUAL_INT32(123, result);
+	TEST_ASSERT_EQUAL_INT(-EINVAL, pcm_rms(silence, 2U, NULL));
+}
+
 int main(void)
 {
 	UNITY_BEGIN();
+	RUN_TEST(test_pcm_rms_units_extremes_and_invalid_inputs);
 	RUN_TEST(test_clock_starts_unset_and_reset_clears_it);
 	RUN_TEST(test_clock_tracks_monotonic_milliseconds);
 	RUN_TEST(test_epoch_and_dates_after_2038);
@@ -313,6 +421,9 @@ int main(void)
 	RUN_TEST(test_state_flags_names_and_invalid_inputs);
 	RUN_TEST(test_csv_prints_engineering_units);
 	RUN_TEST(test_csv_checks_nulls_and_buffer_bounds);
+	RUN_TEST(test_expanded_csv_preserves_column_order_and_units);
+	RUN_TEST(test_expanded_csv_omits_unavailable_sensor_groups);
+	RUN_TEST(test_expanded_csv_handles_extremes_and_bounds);
 	RUN_TEST(test_legacy_csv_converts_saved_reading);
 	RUN_TEST(test_legacy_csv_accepts_integer_boundaries);
 	RUN_TEST(test_legacy_csv_rejects_invalid_rows_without_changing_output);

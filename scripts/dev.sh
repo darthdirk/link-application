@@ -10,13 +10,18 @@ case "$target" in
     *) printf 'Unknown target: %s\n' "$target" >&2; exit 2 ;;
 esac
 extra_conf=debug.conf
+# Name the sensor fragment explicitly: an existing Zephyr cache may otherwise
+# retain the pre-upgrade CONF_FILE list and miss a newly added boards/*.conf.
+if [[ $target == thingy ]]; then
+    extra_conf="boards/thingy53_nrf5340_cpuapp.conf;$extra_conf"
+fi
 extra_args=()
 case "$command_name" in
     build-diagnostics|flash-diagnostics)
         [[ $target == thingy ]] || { printf 'Diagnostics target is Thingy:53 only.\n' >&2; exit 2; }
         build_dir="${THING_BUILD_DIR_53}-diagnostics"
         command_name=${command_name%-diagnostics}
-        extra_conf='debug.conf;diagnostics.conf'
+        extra_conf+=';diagnostics.conf'
         extra_args+=("-DEXTRA_DTC_OVERLAY_FILE=boards/thingy53-i2c-diagnostics.overlay")
         ;;
 esac
@@ -26,7 +31,7 @@ case "$command_name" in
             [[ -d $BSP_DIR/zephyr ]] || { printf 'Invalid BSP_DIR: %s\n' "$BSP_DIR" >&2; exit 2; }
             extra_args+=("-DEXTRA_ZEPHYR_MODULES=$BSP_DIR")
         fi
-        west build --no-sysbuild --pristine=auto --board "$board" --build-dir "$build_dir" "$LOGGER_REPO_DIR/app" -- "-DEXTRA_CONF_FILE=$extra_conf" "${extra_args[@]}"
+        west build --no-sysbuild --pristine=auto --board "$board" --build-dir "$build_dir" "$LOGGER_REPO_DIR/app" -- -DCONF_FILE=prj.conf "-DEXTRA_CONF_FILE=$extra_conf" "${extra_args[@]}"
         ;;
     flash|debugserver)
         [[ -f $build_dir/zephyr/zephyr.elf ]] || { printf 'Build this target first.\n' >&2; exit 2; }

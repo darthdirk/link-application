@@ -4,5 +4,7 @@ project(link_logger LANGUAGES C)
 target_include_directories(app PRIVATE include)
 target_sources(app PRIVATE
   src/main.c src/app.c src/state.c src/sensors.c src/record.c
-  src/timekeeping.c src/logging.c src/config.c src/com.c src/shell.c src/heartbeat.c)
+  src/timekeeping.c src/logging.c src/config.c src/com.c src/shell.c src/heartbeat.c
+  src/battery.c src/microphone.c src/audio_level.c src/sensor_color.c src/sensor_gas.c
+  src/sensor_magnetometer.c)
 target_compile_options(app PRIVATE -Wall -Wextra -Werror -Wformat=2)

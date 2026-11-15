@@ -14,6 +14,7 @@ endif()
 
 add_executable(logger_core_tests
   test_core.c
+  ../app/src/audio_level.c
   ../app/src/record.c
   ../app/src/state.c
   ../app/src/timekeeping.c

@@ -59,7 +59,8 @@ just serial
 
 It uses a separate `build/thingy53-diagnostics` directory, the same selected
 J-Link, and normal sector programming. It does not format LittleFS or change the
-normal BME280 binding. Keep logging and streaming stopped and run:
+normal BME280 binding. Onboard sensors are also enabled. Stop logging and streaming,
+wait for `state=idle`, and run these read-only identification commands:
 
 ```text
 i2c read_byte i2c@9000 0x77 0xd0
@@ -71,7 +72,7 @@ humidity channel; `0x61` identifies a BME680/BME688, which requires a different
 driver. A failed read means that bus/address did not return a usable identity;
 it does not alone identify whether wiring, supply, pull-ups, or the address is wrong.
 
-For a control reading from the onboard BME688, whose driver remains disabled:
+For a control reading from the enabled onboard BME688, while still idle:
 
 ```text
 i2c read_byte i2c@9000 0x76 0xd0

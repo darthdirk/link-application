@@ -10,8 +10,8 @@ The supplied PCA20053 hardware 1.1.0 schematic confirms:
 | I2C address | 0x77 |
 | Green LED | P1.06, active high |
 
-The external BME280 now uses I2C1. Its address does not conflict with the onboard
-BME688 at 0x76. The onboard sensor drivers remain disabled. Keep the switched
+The external BME280 uses I2C1. Its address does not conflict with the enabled
+onboard BME688 at 0x76, BMM150 at 0x10, or BH1749 at 0x38. Keep the switched
 sensor rail enabled for the existing 4.7 kOhm I2C pull-ups and the 3V3 rail enabled
 for the green LED; both retain their board defaults. Match the external sensor's
 I/O voltage to the board bus and use a common ground.
@@ -39,5 +39,6 @@ The nRF5340 DK uses the same P1.02/P1.03 sensor wiring; build/flash with the DK
 recipes when using that board.
 
 If the optional diagnostic build was previously installed, use the normal build
-above for this update. The corrected sensor can be checked through the optional
-I2C shell with `i2c read_byte i2c@9000 0x77 0xd0`; a BME280 returns 0x60.
+above for this update. In the diagnostic image, stop logging and streaming and
+wait for `state=idle` before using the I2C shell. The external sensor can then be
+checked with `i2c read_byte i2c@9000 0x77 0xd0`; a BME280 returns 0x60.

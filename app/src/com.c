@@ -18,8 +18,10 @@
 
 LOG_MODULE_REGISTER(com, LOG_LEVEL_DBG);
 
-#define COM_LINE_SIZE 192
-#define COM_QUEUE_DEPTH 16
+#define COM_LINE_SIZE RECORD_TEXT_SIZE
+#define COM_QUEUE_DEPTH 8
+
+_Static_assert(sizeof(RECORD_STREAM_HEADER) <= COM_LINE_SIZE, "CSV header exceeds TX line");
 
 struct com_line {
 	char text[COM_LINE_SIZE];
@@ -83,7 +85,7 @@ static void output_thread(void *unused1, void *unused2, void *unused3)
 	}
 }
 
-K_THREAD_DEFINE(com_tx, 2048, output_thread, NULL, NULL, NULL, 8, 0, 0);
+K_THREAD_DEFINE(com_tx, 4096, output_thread, NULL, NULL, NULL, 8, 0, 0);
 
 void com_init(void)
 {

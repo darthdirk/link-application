@@ -14,7 +14,7 @@
 LOG_MODULE_REGISTER(logging, LOG_LEVEL_DBG);
 
 #define LOG_MAX_BYTES (1024U * 1024U)
-#define LOG_LINE_SIZE 128
+#define LOG_LINE_SIZE RECORD_TEXT_SIZE
 #define LOG_PATH_SIZE (sizeof(LOG_MOUNT_POINT) + LOG_NAME_MAX)
 
 FS_LITTLEFS_DECLARE_DEFAULT_CONFIG(littlefs);
@@ -107,12 +107,15 @@ int logging_format(void)
 	return result == 0 ? logging_init() : result;
 }
 
-enum csv_format { CSV_UNKNOWN, CSV_READABLE, CSV_LEGACY };
+enum csv_format { CSV_UNKNOWN, CSV_EXTENDED, CSV_ENVIRONMENT, CSV_LEGACY };
 
 static enum csv_format header_format(const char *header)
 {
 	if (strcmp(header, RECORD_CSV_HEADER) == 0) {
-		return CSV_READABLE;
+		return CSV_EXTENDED;
+	}
+	if (strcmp(header, RECORD_ENVIRONMENT_HEADER) == 0) {
+		return CSV_ENVIRONMENT;
 	}
 	return strcmp(header, RECORD_LEGACY_CSV_HEADER) == 0 ? CSV_LEGACY : CSV_UNKNOWN;
 }
@@ -120,8 +123,9 @@ static enum csv_format header_format(const char *header)
 /* Read bounded lines and normalize old integer CSVs without changing the input file. */
 static int read_csv(struct fs_file_t *input, log_emit_fn emit, void *context)
 {
-	char chunk[LOG_LINE_SIZE];
-	char line[LOG_LINE_SIZE];
+	char chunk[128];
+	/* Filesystem calls are serialized by the application thread. */
+	static char line[LOG_LINE_SIZE];
 	size_t used = 0;
 	enum csv_format format = CSV_UNKNOWN;
 
@@ -146,14 +150,17 @@ static int read_csv(struct fs_file_t *input, log_emit_fn emit, void *context)
 				if (format == CSV_UNKNOWN) {
 					return -EBADMSG;
 				}
-				memcpy(line, RECORD_CSV_HEADER, sizeof(RECORD_CSV_HEADER));
+				if (format == CSV_LEGACY) {
+					memcpy(line, RECORD_ENVIRONMENT_HEADER,
+					       sizeof(RECORD_ENVIRONMENT_HEADER));
+				}
 			} else if (format == CSV_LEGACY) {
 				struct sensor_record record;
 				int result = record_parse_legacy(line, &record);
 				if (result != 0) {
 					return result;
 				}
-				result = record_format(&record, line, sizeof(line));
+				result = record_format_environment(&record, line, sizeof(line));
 				if (result < 0) {
 					return result;
 				}
@@ -167,7 +174,7 @@ static int read_csv(struct fs_file_t *input, log_emit_fn emit, void *context)
 	}
 }
 
-static int check_existing(bool *legacy)
+static int check_existing(void)
 {
 	char header[LOG_LINE_SIZE];
 	size_t used = 0;
@@ -191,7 +198,11 @@ static int check_existing(bool *legacy)
 	if (format == CSV_UNKNOWN) {
 		return -EBADMSG;
 	}
-	*legacy = format == CSV_LEGACY;
+	if (format != CSV_EXTENDED) {
+		/* Preserve prior records exactly; do not mix schemas in one file. */
+		LOG_WRN("Old CSV columns: use log start with a new filename");
+		return -EPROTONOSUPPORT;
+	}
 	int result = fs_seek(&file, -1, FS_SEEK_END);
 	if (result != 0) {
 		return result;
@@ -206,71 +217,6 @@ static int check_existing(bool *legacy)
 		return -EBADMSG;
 	}
 	return fs_seek(&file, 0, FS_SEEK_END);
-}
-
-struct csv_writer {
-	struct fs_file_t *target;
-	size_t bytes;
-};
-
-static int write_csv_line(const char *line, void *context)
-{
-	struct csv_writer *writer = context;
-	char output[LOG_LINE_SIZE];
-	size_t length = strlen(line);
-	if (length >= sizeof(output) || length + 1 > LOG_MAX_BYTES - writer->bytes) {
-		return -EFBIG;
-	}
-	memcpy(output, line, length);
-	output[length++] = '\n';
-	int result = write_all(writer->target, output, length);
-	if (result == 0) {
-		writer->bytes += length;
-	}
-	return result;
-}
-
-/* The app thread owns all filesystem work. Replace only after a complete, synced copy. */
-static int migrate_legacy(const char *path)
-{
-	static const char temporary[] = LOG_MOUNT_POINT "/log-convert.tmp";
-	int result = fs_seek(&file, 0, FS_SEEK_SET);
-	if (result != 0) {
-		return result;
-	}
-	struct fs_file_t target;
-	fs_file_t_init(&target);
-	result = fs_open(&target, temporary, FS_O_CREATE | FS_O_WRITE | FS_O_TRUNC);
-	if (result != 0) {
-		return result;
-	}
-	struct csv_writer writer = {.target = &target};
-	result = read_csv(&file, write_csv_line, &writer);
-	if (result == 0) {
-		result = fs_sync(&target);
-	}
-	int close_result = fs_close(&target);
-	if (result == 0) {
-		result = close_result;
-	}
-	close_result = fs_close(&file);
-	opened = false;
-	if (result == 0) {
-		result = close_result;
-	}
-	if (result == 0) {
-		/* LittleFS atomically replaces an existing file; never unlink the original. */
-		result = fs_rename(temporary, path);
-	}
-	if (result != 0) {
-		(void)fs_unlink(temporary);
-		return result;
-	}
-	file_bytes = writer.bytes;
-	fs_file_t_init(&file);
-	result = fs_open(&file, path, FS_O_READ | FS_O_WRITE);
-	opened = result == 0;
-	return result == 0 ? fs_seek(&file, 0, FS_SEEK_END) : result;
 }
 
 int logging_start(const char *name)
@@ -309,11 +255,7 @@ int logging_start(const char *name)
 	opened = true;
 	write_error = 0;
 	if (file_bytes != 0) {
-		bool legacy = false;
-		result = check_existing(&legacy);
-		if (result == 0 && legacy) {
-			result = migrate_legacy(path);
-		}
+		result = check_existing();
 	} else {
 		static const char header[] = RECORD_CSV_HEADER "\n";
 		result = write_all(&file, header, sizeof(header) - 1);

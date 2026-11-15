@@ -11,7 +11,7 @@ case "${1:-}" in
         # Check the portable modules here; all firmware modules build with -Werror.
         cppcheck --enable=warning,style,performance,portability --error-exitcode=1 \
             --inline-suppr --std=c11 -I app/include \
-            app/src/state.c app/src/timekeeping.c app/src/record.c
+            app/src/state.c app/src/timekeeping.c app/src/record.c app/src/audio_level.c
         ;;
     *) printf 'Usage: %s {format|format-check|cppcheck}\n' "$0" >&2; exit 2 ;;
 esac

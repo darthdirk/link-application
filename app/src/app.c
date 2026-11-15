@@ -26,6 +26,7 @@ static struct {
 	int64_t next_stream;
 	int64_t next_flush;
 	uint32_t sensor_errors;
+	uint32_t last_valid_mask;
 	int last_error;
 	bool sensor_ready;
 } app;
@@ -84,10 +85,12 @@ static int handle_command(const struct app_command *command)
 	switch (command->type) {
 	case APP_STATUS:
 		com_print("state=%s sensor=%s storage=%s last_error=%d sensor_errors=%" PRIu32
-			  " output_dropped=%" PRIu32,
+			  " output_dropped=%" PRIu32 " available_mask=%" PRIu32
+			  " last_valid_mask=%" PRIu32,
 			  state_name(app.state), app.sensor_ready ? "ready" : "unavailable",
 			  logging_ready() ? "ready" : "unavailable", app.last_error,
-			  app.sensor_errors, com_dropped_count());
+			  app.sensor_errors, com_dropped_count(), sensors_available_mask(),
+			  app.last_valid_mask);
 		return 0;
 	case APP_LOG_START:
 		if (state_logs(app.state)) {
@@ -98,6 +101,10 @@ static int handle_command(const struct app_command *command)
 		}
 		err = logging_start(command->text[0] ? command->text : "readings.csv");
 		if (err != 0) {
+			if (err == -EPROTONOSUPPORT) {
+				com_print(
+				    "Older CSV preserved; start a new file: log start sensors.csv");
+			}
 			return err;
 		}
 		app.state = state_next(app.state, STATE_START_LOG);
@@ -199,6 +206,12 @@ static void sample_if_due(int64_t now)
 		int err = sensors_read(&record);
 		int64_t acquired = k_uptime_get();
 
+		app.last_valid_mask = record.valid_mask;
+		if (err == 0 && record.valid_mask != sensors_available_mask()) {
+			/* Keep good measurements; missing groups are blank in this record. */
+			app.sensor_errors++;
+		}
+
 		/* No catch-up bursts after a slow peripheral operation. */
 		if (log_due) {
 			app.next_log =
@@ -266,7 +279,7 @@ void app_run(void)
 	app.sensor_ready = (err == 0);
 	if (err != 0) {
 		app.last_error = err;
-		LOG_ERR("BME280 unavailable: %d", err);
+		LOG_ERR("No sensors available: %d", err);
 	}
 	err = logging_init();
 	if (err == 0) {
@@ -289,7 +302,10 @@ void app_run(void)
 				com_print("Done; state=%s", state_name(app.state));
 			}
 		}
+		sensors_set_active(app.state != STATE_IDLE);
 		/* Check deadlines even under a continuous stream of CLI commands. */
 		sample_if_due(k_uptime_get());
+		/* A storage error may have stopped the only active acquisition mode. */
+		sensors_set_active(app.state != STATE_IDLE);
 	}
 }

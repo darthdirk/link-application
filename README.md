@@ -1,6 +1,6 @@
-# LINK BME280 logger
+# LINK sensor logger
 
-A small Zephyr application for an **external BME280 over I²C**, with a **USB CDC ACM shell**, CSV recording to LittleFS, and simultaneous streaming. It starts idle. Logging and streaming each default to one reading every 30 seconds. No Bluetooth, Wi-Fi, cellular modem, or network-core firmware is built.
+A modular Zephyr logger for the **Thingy:53 onboard sensors plus an external BME280 over I²C**, with a **USB CDC ACM shell**, CSV recording to LittleFS, and simultaneous streaming. The nRF5340 DK build uses the external BME280 and leaves onboard-only columns empty. It starts idle. Logging and streaming each default to one reading every 30 seconds. No Bluetooth, Wi-Fi, cellular modem, or network-core firmware is built.
 
 The application uses the Zephyr revision shipped with nRF Connect SDK 3.0.0 and Zephyr SDK 0.17.0. `west.yml` pins the needed modules instead of pulling the full Nordic SDK. Board hardware belongs in the board overlays/BSP; application modules do not contain board pin numbers. A separate `Hyrule-Zephyr-SDK` checkout is left untouched and can be enabled with `BSP_DIR` when developing a custom board.
 
@@ -46,13 +46,13 @@ Both builds use the external BME280 at **7-bit I²C address `0x77`**, with SDO a
 | VDD/VDDIO and pull-ups | Contact 4, `VDD_nRF53` | DK VDD logic rail |
 | GND | Contact 20 | GND |
 
-The uploaded `PCA20053_Schematic_And_PCB.pdf`, revision 1.1.0 sheet 2, confirms TP4/P1.02 and TP5/P1.03. Both builds use I²C1. This replaces the earlier edge-connector SDA/SCL assignment. The Thingy bus already has 4.7 kΩ pull-ups powered by its switched sensor rail, which remains enabled. Use a breakout compatible with that logic voltage; do not add pull-ups to an unrelated supply. The onboard BME688 at `0x76` shares the bus but its driver is disabled; it does not conflict with the external BME280 at `0x77`.
+The uploaded `PCA20053_Schematic_And_PCB.pdf`, revision 1.1.0 sheet 2, confirms TP4/P1.02 and TP5/P1.03. Both builds use I²C1. This replaces the earlier edge-connector SDA/SCL assignment. The Thingy bus already has 4.7 kΩ pull-ups powered by its switched sensor rail, which remains enabled. Use a breakout compatible with that logic voltage; do not add pull-ups to an unrelated supply. The onboard BME688 at `0x76`, BMM150 at `0x10`, and BH1749 at `0x38` share the bus; they do not conflict with the external BME280 at `0x77`. No additional wiring is needed for the onboard sensors.
 
 The green power indicator pulses for 100 ms every 10 seconds, starting ten seconds after application initialization. Thingy uses P1.06 (active high); the DK uses its green LED0 (active low). `heartbeat.c` uses a separate delayed work item and the board's `heartbeat-led` alias. GPIO access runs in thread context. The LED supply stays enabled, and the kernel remains tickless; the pulse adds short wakeups even when recording and streaming are idle. This is an activity indicator, not a watchdog guarantee.
 
 The pinned Zephyr board definition exposes **`thingy53/nrf5340/cpuapp`**, without revision qualifiers. Your example `@2_0_0` and `@3_0_0` targets are not defined in this pin. `just build_53` uses the supported target; confirm the connector mapping against the hardware revision printed on your board.
 
-Thingy:53 needs an external J-Link attached to SWD; its USB cable provides the serial console. On the nRF5340 DK, use the **nRF USB connector** for this CDC ACM console; the separate debug USB connector is for its onboard probe. Set `DEBUG_53_SN` to the actual probe being used for either target.
+Thingy:53 needs an external J-Link attached to SWD; its USB cable provides the serial console. On the nRF5340 DK, use the **nRF USB connector** for this CDC ACM console; the separate debug USB connector is for its onboard probe. Set `DEBUG_53_SN` to the actual probe being used for either target. The USB product name is now `LINK Sensor Logger`; if `SERIAL_PORT` uses `/dev/serial/by-id/`, update that path after flashing (the `/dev/ttyACM0` default is unchanged).
 
 ## Build, flash, and debug
 
@@ -83,7 +83,7 @@ Use `just debug_server_dk` with the DK launch entry. GDB connects to `localhost:
 
 ## PC capture application
 
-The Minicom capture tool is maintained separately as `link-environment-capture`, with its own repository, `justfile`, `.envrc`, setup, and tests. Use this firmware repository to build and flash the board, then run `just capture` from the capture application's directory. The capture application sets UTC and the 30-second rates and writes `env-YYYY-MM-DD.csv` files with midnight rollover in America/Denver.
+The Minicom capture tool is maintained separately as `link-environment-capture`, with its own repository, `justfile`, `.envrc`, setup, and tests. Use this firmware repository to build and flash the board, then run `just capture` from the capture application's directory. The capture application sets UTC and the 30-second streaming rate and writes `env-YYYY-MM-DD.csv` files with midnight rollover in America/Denver. Update that application along with this firmware so it recognizes the expanded CSV header. Expanded captures go under `logs/thingy53/` (or `thingy53/` inside `LOGGER_CAPTURE_DIR`); existing five-column captures remain untouched in their original directory. PC capture does not need a mounted LittleFS volume.
 
 Existing `logs/` files in this firmware checkout are preserved and remain ignored by Git. To continue appending to them, set `LOGGER_CAPTURE_DIR` in the separate application's `.envrc.private` to this checkout's `logs/` directory, then run `direnv allow` there.
 
@@ -121,16 +121,27 @@ log dump experiment.csv
 
 Files and saved configuration persist across ordinary resets and flashes. Wait for a successful `log stop` or `log flush` before resetting or removing power; the default periodic flush is every ten seconds. A sudden power loss can lose records since the last completed flush. Every boot starts idle: logging and streaming must be started again.
 
-UTC is maintained from Zephyr's monotonic uptime after `time set`; there is no assumed battery-backed calendar RTC. UTC starts unset after a reset/power loss. Records use `epoch_ms=-1` until it is set. Both saved CSVs and live readings use decimal degrees Celsius, percent RH, and hPa, with no `STREAM,` prefix:
+UTC is maintained from Zephyr's monotonic uptime after `time set`; there is no assumed battery-backed calendar RTC. UTC starts unset after a reset/power loss. Records use `epoch_ms=-1` until it is set. Both saved CSVs and live readings use the same 29-column header, with readable engineering units and no `STREAM,` prefix.
 
-```text
-uptime_ms,epoch_ms,temperature_C,humidity_pct,pressure_hPa
-113280,1794331567132,24.550,20.603,844.77
-```
+| Sensor | CSV columns and units | Validity bit |
+| --- | --- | --- |
+| External BME280 | `temperature_C`, `humidity_pct`, `pressure_hPa` | 1 |
+| Onboard BME688 | `bme688_temperature_C`, `bme688_humidity_pct`, `bme688_pressure_hPa` | 2 |
+| BME688 gas element | `bme688_gas_ohm`, raw gas resistance in ohms | 4 |
+| BMI270 IMU | `bmi270_accel_{x,y,z}_m_s2`, `bmi270_gyro_{x,y,z}_rad_s` | 8 |
+| ADXL362 low-power accelerometer | `adxl362_accel_{x,y,z}_m_s2`, `adxl362_temperature_C` (die temperature) | 16 |
+| BMM150 magnetometer | `bmm150_{x,y,z}_uT` | 32 |
+| BH1749 color/IR | `bh1749_red`, `bh1749_green`, `bh1749_blue`, `bh1749_ir`, raw counts | 64 |
+| Battery voltage divider | `battery_V` | 128 |
+| VM3011 microphone | `microphone_rms`, short-window RMS PCM amplitude | 256 |
 
-Older files with `temperature_mC,humidity_mpercent,pressure_Pa` in their header are still supported. `log dump` displays them in the readable units above without rewriting the file. On the first `log start` for an old file, the logger validates and converts all existing rows into a temporary file, syncs and closes it, then atomically replaces the original before appending. If validation or storage fails before replacement, the original remains unchanged. Conversion needs room for the temporary copy and can briefly pause streaming while that one-time operation runs. No format is needed. A damaged or incomplete last row is rejected; use a different filename to keep recording while preserving the damaged file for inspection.
+`uptime_ms` and `epoch_ms` remain the first two columns; `valid_mask` is the last column. The mask is the sum of the bits for successfully measured groups (511 when every group is valid). A missing/failed group has empty CSV fields, never a stale measurement or a fabricated zero. `status` reports `available_mask` from initialization and `last_valid_mask` from the latest acquisition, as well as the count of partial/failed samples. Onboard sensors continue recording even if the external BME280 is absent.
 
-A disconnected or slow USB host may lose stream/output records; `status` reports the drop count. Recording does not depend on USB delivery. A storage error stops recording and reports the error while leaving streaming enabled. Sensor failures are counted rather than storing fabricated readings.
+The onboard temperature is affected by enclosure/electronics and gas-heater warmth, so it need not match the external probe. Gas resistance is not an IAQ, CO₂, or VOC concentration estimate; no proprietary BSEC algorithm is used. Gas data is emitted only when the sensor reports a valid conversion and stable heater. Color values are raw counts at fixed gain/integration time, not lux. Motion values are snapshots in the sensors' native axes; no orientation fusion is performed. The sensor sweep is sequential, usually around 0.7–1 second, with a timestamp at completion; it is not a simultaneous acquisition of every channel. Microphone RMS is an amplitude in PCM counts, not calibrated dB SPL or an audio recording. Battery voltage is measured directly; no percentage is inferred from it.
+
+Existing five-column CSV files remain readable with `log dump`. Old integer BME280 rows are displayed in degrees C, percent RH, and hPa without rewriting their files. The logger rejects appending the expanded schema to an old file and asks for a new name, for example `log start sensors.csv`. No formatting or data migration is required. A damaged or incomplete last row is rejected; choose a different filename to preserve the file for inspection.
+
+A disconnected or slow USB host may lose stream/output records; `status` reports the drop count. Recording does not depend on USB delivery. A storage error stops recording and reports the error while leaving streaming enabled. Individual sensor failures are counted while valid measurements from the other sensors continue to be saved and streamed.
 
 ## Saved configuration and diagnostic messages
 
@@ -144,7 +155,7 @@ config save
 config show
 ```
 
-All intervals are milliseconds, from 100 to 3,600,000. Defaults are 30,000 ms for log/stream and 10,000 ms for flush. An existing `/lfs/config.cfg` survives flashing and overrides these defaults; run the commands above to update a previously configured board to 30-second sampling. Saving writes and syncs a temporary file before renaming it. A malformed configuration is rejected as a whole; defaults remain active. A sudden power loss can lose records since the last completed flush; use `log flush`/`log stop` before removing power.
+All intervals are milliseconds, from 100 to 3,600,000. A complete onboard sweep takes longer than 100 ms; intervals shorter than the acquisition time skip missed slots rather than producing catch-up bursts. Use the 30-second default for environmental capture. Defaults are 30,000 ms for log/stream and 10,000 ms for flush. An existing `/lfs/config.cfg` survives flashing and overrides these defaults; run the commands above to update a previously configured board to 30-second sampling. Saving writes and syncs a temporary file before renaming it. A malformed configuration is rejected as a whole; defaults remain active. A sudden power loss can lose records since the last completed flush; use `log flush`/`log stop` before removing power.
 
 Diagnostic messages are separate from CSV recordings. Select the minimum severity per module or globally:
 
@@ -165,7 +176,9 @@ Levels are `off`, `err`, `warn`, `info`, `debug`; a level includes more severe m
 | --- | --- |
 | `app.c` / `state.c` | Own commands, four states, and independent acquisition/flush deadlines |
 | `com.c` / `shell.c` | USB CDC ACM transport, bounded output, command parsing |
-| `sensors.c` | BME280 acquisition through Zephyr's sensor API |
+| `sensors.c` | Independent acquisition, units, and per-sensor validity |
+| `sensor_color.c` / `sensor_gas.c` / `sensor_magnetometer.c` | Bounded color/gas/magnetic measurements and pinned-driver workarounds |
+| `battery.c` / `microphone.c` / `audio_level.c` | Battery voltage and bounded microphone RMS snapshots |
 | `logging.c` | LittleFS mount, bounded CSV files, flush/list/dump |
 | `config.c` | Validate/load/save `config.cfg` |
 | `timekeeping.c` | Validated UTC conversion and uptime-based clock |
@@ -174,7 +187,7 @@ Levels are `off`, `err`, `warn`, `info`, `debug`; a level includes more severe m
 
 The shell thread enqueues requests; a communications worker drains bounded output queues. One application thread owns sensor reads, filesystem operations, configuration, and state changes, avoiding shared mutable file handles and timer-callback races. The states are `IDLE`, `LOGGING`, `STREAMING`, and `BOTH`; a failed log start never commits the logging state. Sensor reads and flash writes run in thread context. Matching log/stream deadlines share one reading.
 
-`CONFIG_TICKLESS_KERNEL=y` remains enabled. When idle the application thread blocks for commands; the heartbeat independently schedules its short LED pulse. The BME280 uses forced measurements and sleeps between them, with runtime power management for supported peripherals. On Thingy, 3V3 powers the LED and the switched sensor rail supplies the I²C pull-ups, so both rails remain enabled. USB, the debugger, board regulators, and attached breakout pull-ups affect current consumption; battery current still needs measurement on hardware.
+`CONFIG_TICKLESS_KERNEL=y` remains enabled. When idle the application thread blocks for commands; the heartbeat independently schedules its short LED pulse. BME280/BME688 use forced measurements; BMI270 and BH1749 are enabled only around an acquisition, and the microphone clock stops after each short sample. BMM150 takes a bounded forced measurement and then suspends through a small adapter that avoids the pinned driver's power-management bug. ADXL362 stays in its 12.5 Hz low-power mode; its driver does not provide suspend/resume in this configuration. Runtime power management controls the battery-divider switch and supported peripherals. Enabling the onboard sensor suite increases current compared with the external-BME280-only build; tickless scheduling alone does not shut down sensors. On Thingy, 3V3 powers the LED and the switched sensor rail supplies the I²C pull-ups, so both rails remain enabled. USB, the debugger, board regulators, and attached breakout pull-ups affect current consumption; battery current still needs measurement on hardware.
 
 ## Checks
 
@@ -184,4 +197,4 @@ just check         # format check, cppcheck, focused Unity tests
 just hooks         # reinstall local Git hooks if needed
 ```
 
-The Unity suite covers UTC/calendar validation, all start/stop state combinations, record formatting bounds, and legacy CSV validation. Cppcheck checks `state.c`, `timekeeping.c`, and `record.c`. Zephyr kernel/shell macros exceed its preprocessor support, so the remaining firmware modules are checked by ARM GCC with `-Wall -Wextra -Werror -Wformat=2`. CI builds both boards and runs the same checks. These checks do not replace hardware validation of USB enumeration, I²C wiring, flash retention, and power consumption.
+The Unity suite covers UTC/calendar validation, all start/stop state combinations, expanded record formatting and missing fields, legacy CSV validation, and microphone RMS bounds. Cppcheck checks `state.c`, `timekeeping.c`, `record.c`, and `audio_level.c`. Zephyr kernel/shell macros exceed its preprocessor support, so the remaining firmware modules are checked by ARM GCC with `-Wall -Wextra -Werror -Wformat=2`. CI builds both boards and runs the same checks. These checks do not replace hardware validation of USB enumeration, I²C wiring, flash retention, and power consumption.

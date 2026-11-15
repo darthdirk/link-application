@@ -1,0 +1,7 @@
+description: ROHM BH1749NUC color sensor read by the application polling adapter
+compatible: "rohm,bh1749"
+include: i2c-device.yaml
+properties:
+  int-gpios:
+    type: phandle-array
+    description: Optional active-low interrupt output (unused by the polling adapter)
